@@ -1,7 +1,10 @@
 package cmd
 
 import (
+	"encoding/csv"
 	"fmt"
+	"log"
+	"os"
 	"strconv"
 
 	"github.com/spf13/cobra"
@@ -9,7 +12,7 @@ import (
 
 var Format string
 
-type ShopifyCSVColumn int
+type ShopifyCSVColumn uint8
 
 const (
 	FIRST_NAME                    ShopifyCSVColumn = 0
@@ -30,16 +33,27 @@ const (
 	NOTE                          ShopifyCSVColumn = 15
 	TAX_EXEMPT                    ShopifyCSVColumn = 16
 
-	DEFAULT_MAXIMUM_TO_GENERATE int = 10000
+	DEFAULT_MAXIMUM_TO_GENERATE int = 100000
 )
 
-var shopifyColumns = [17]ShopifyCSVColumn{
-	FIRST_NAME, LAST_NAME, EMAIL,
-	ACCEPTS_EMAIL_MARKETING, DEFAULT_ADDRESS_COMPANY,
-	DEFAULT_ADDRESS_ADDRESS_1, DEFAULT_ADDRESS_ADDRESS_2,
-	DEFAULT_ADDRESS_CITY, DEFAULT_ADDRESS_PROVINCE_CODE,
-	DEFAULT_ADDRESS_ZIP, DEFAULT_ADDRESS_PHONE,
-	PHONE, ACCEPTS_SMS_MARKETING, TAGS, NOTE, TAX_EXEMPT,
+var headers_map = map[ShopifyCSVColumn]string{
+	FIRST_NAME:                    "First Name",
+	LAST_NAME:                     "Last Name",
+	EMAIL:                         "Email",
+	ACCEPTS_EMAIL_MARKETING:       "Accepts Email Marketing",
+	DEFAULT_ADDRESS_COMPANY:       "Default Address Company",
+	DEFAULT_ADDRESS_ADDRESS_1:     "Default Address Address1",
+	DEFAULT_ADDRESS_ADDRESS_2:     "Default Address Address2",
+	DEFAULT_ADDRESS_CITY:          "Default Address City",
+	DEFAULT_ADDRESS_PROVINCE_CODE: "Default Address Province Code",
+	DEFAULT_ADDRESS_COUNTRY_CODE:  "Default Address Country Code",
+	DEFAULT_ADDRESS_ZIP:           "Default Address Zip",
+	DEFAULT_ADDRESS_PHONE:         "Default Address Phone",
+	PHONE:                         "Phone",
+	ACCEPTS_SMS_MARKETING:         "Accepts SMS Marketing",
+	TAGS:                          "Tags",
+	NOTE:                          "Note",
+	TAX_EXEMPT:                    "Tax Exempt",
 }
 
 func init() {
@@ -58,55 +72,77 @@ Planned support is just CSV for now.`,
 	},
 }
 
-func generateCSV() [DEFAULT_MAXIMUM_TO_GENERATE][len(shopifyColumns)]string {
-	var records [DEFAULT_MAXIMUM_TO_GENERATE][len(shopifyColumns)]string
+func generateCSV() {
+	records := make([][]string, DEFAULT_MAXIMUM_TO_GENERATE+1)
+
+	headers := make([]string, len(headers_map))
+	for i := 0; i < len(headers_map); i++ {
+		headers[i] = headers_map[ShopifyCSVColumn(i)]
+	}
+	records[0] = headers
 
 	for i := 1; i <= DEFAULT_MAXIMUM_TO_GENERATE; i++ {
-		var record [len(shopifyColumns)]string
-		for j := 0; j < len(shopifyColumns); j++ {
-			record[j] = csvContent(ShopifyCSVColumn(j))
+		record := make([]string, len(headers_map))
+		for j := 0; j < len(headers_map); j++ {
+			record[j] = csvContent(ShopifyCSVColumn(j), i)
 		}
-		records[i-1] = record
-		fmt.Print(record)
+		records[i] = record
 	}
 
-	return records
+	dirname, err := os.UserHomeDir()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	csvFile, _ := os.Create(dirname + "/test.csv")
+	defer csvFile.Close()
+
+	w := csv.NewWriter(csvFile)
+	w.WriteAll(records)
+
+	if err := w.Error(); err != nil {
+		log.Fatalln("error writing csv:", err)
+	}
 }
 
-func csvContent(column ShopifyCSVColumn) string {
+func csvContent(column ShopifyCSVColumn, record int) string {
 	var content string
 
 	switch column {
 	case FIRST_NAME:
+		fallthrough
 	case LAST_NAME:
-		content = generateName(column)
+		content = generateName(record)
 	case EMAIL:
-		content = generateEmail(column)
+		content = generateEmail(record)
 	case ACCEPTS_EMAIL_MARKETING:
+		fallthrough
 	case ACCEPTS_SMS_MARKETING:
+		fallthrough
 	case TAX_EXEMPT:
-		content = generateYesNo(column)
+		content = generateYesNo(record)
 	case DEFAULT_ADDRESS_COMPANY:
-		content = generateAddressCompany(column)
+		content = generateAddressCompany()
 	case DEFAULT_ADDRESS_ADDRESS_1:
-		content = generateAddress1(column)
+		content = generateAddress1(record)
 	case DEFAULT_ADDRESS_ADDRESS_2:
-		content = generateAddress2(column)
+		content = generateAddress2()
 	case DEFAULT_ADDRESS_CITY:
-		content = generateAddressCity(column)
+		content = generateAddressCity()
 	case DEFAULT_ADDRESS_PROVINCE_CODE:
-		content = generateDefaultProvinceCode(column)
+		content = generateDefaultProvinceCode()
 	case DEFAULT_ADDRESS_COUNTRY_CODE:
-		content = generateAddressCountryCode(column)
+		content = generateAddressCountryCode()
 	case DEFAULT_ADDRESS_ZIP:
-		content = generateDefaultAddressZip(column)
+		content = generateDefaultAddressZip()
 	case DEFAULT_ADDRESS_PHONE:
+		fallthrough
 	case PHONE:
-		content = generatePhone(column)
+		content = generatePhone()
 	case TAGS:
-		content = generateTags(column)
+		content = generateTags()
 	case NOTE:
-		content = generateNote(column)
+		content = generateNote()
 	default:
 		panic("Unsupported column!")
 	}
@@ -114,54 +150,58 @@ func csvContent(column ShopifyCSVColumn) string {
 	return content
 }
 
-func generateName(column ShopifyCSVColumn) string {
-	return "Test" + strconv.Itoa(int(column))
+func generateName(record int) string {
+	return "Test" + strconv.Itoa(record)
 }
 
-func generateEmail(column ShopifyCSVColumn) string {
-	return "Test" + strconv.Itoa(int(column)) + "@lunaris.jp"
+func generateEmail(record int) string {
+	return "Test" + strconv.Itoa(record) + "@lunaris.jp"
 }
 
-func generateYesNo(column ShopifyCSVColumn) string {
-	return "no"
+func generateYesNo(record int) string {
+	if record%2 == 0 {
+		return "yes"
+	} else {
+		return "no"
+	}
 }
 
-func generateAddressCompany(column ShopifyCSVColumn) string {
+func generateAddressCompany() string {
 	return ""
 }
 
-func generateAddress1(column ShopifyCSVColumn) string {
-	return strconv.Itoa(int(column)) + " Fake Street"
+func generateAddress1(record int) string {
+	return strconv.Itoa(record%1000+1) + " Fake Street"
 }
 
-func generateAddress2(column ShopifyCSVColumn) string {
+func generateAddress2() string {
 	return ""
 }
 
-func generateAddressCity(column ShopifyCSVColumn) string {
+func generateAddressCity() string {
 	return "Nakano"
 }
 
-func generateDefaultProvinceCode(column ShopifyCSVColumn) string {
+func generateDefaultProvinceCode() string {
 	return "Tokyo"
 }
 
-func generateAddressCountryCode(column ShopifyCSVColumn) string {
-	return "JP"
+func generateAddressCountryCode() string {
+	return "JA"
 }
 
-func generateDefaultAddressZip(column ShopifyCSVColumn) string {
+func generateDefaultAddressZip() string {
 	return "164-0012"
 }
 
-func generatePhone(column ShopifyCSVColumn) string {
+func generatePhone() string {
 	return "+81 (555) 5555 5555"
 }
 
-func generateTags(column ShopifyCSVColumn) string {
+func generateTags() string {
 	return ""
 }
 
-func generateNote(column ShopifyCSVColumn) string {
+func generateNote() string {
 	return ""
 }
