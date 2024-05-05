@@ -73,7 +73,10 @@ func GenerateCSV() {
 		log.Fatal(err)
 	}
 
-	csvFile, _ := os.Create(dirname + "/test.csv")
+	csvFile, create_err := os.Create(dirname + "/test.csv")
+	if create_err != nil {
+		log.Fatal(create_err)
+	}
 	defer csvFile.Close()
 
 	w := csv.NewWriter(csvFile)
